@@ -1,13 +1,13 @@
 use ndarray::Array2;
 use std::io::{stdout, Stdout, Write};
-use termion::color::{self, Color};
+use termion::color::{self, Color, Fg};
 use termion::cursor;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::screen::{AlternateScreen, ToAlternateScreen, ToMainScreen};
 
 pub struct Field {
     cells: Array2<String>,
-    drawn: bool,
+    shown: bool,
     term: AlternateScreen<RawTerminal<Stdout>>,
 }
 
@@ -18,13 +18,13 @@ impl Field {
         term.suspend_raw_mode().unwrap();
         Field {
             cells: Array2::default(size),
-            drawn: false,
+            shown: false,
             term,
         }
     }
 
-    pub fn draw(&mut self) {
-        self.drawn = true;
+    pub fn show(&mut self) {
+        self.shown = true;
         self.term.activate_raw_mode().unwrap();
 
         write!(self.term, "{}{}", ToAlternateScreen, cursor::Hide).unwrap();
@@ -35,15 +35,15 @@ impl Field {
     }
 
     pub fn hide(&mut self) {
-        self.drawn = false;
+        self.shown = false;
         write!(self.term, "{}{}", ToMainScreen, cursor::Show).unwrap();
         self.term.flush().unwrap();
         self.term.suspend_raw_mode().unwrap();
     }
 
     pub fn set_cell(&mut self, cell: (usize, usize), color: impl Color) {
-        let cell_value = format!("{}■{}", color::Fg(color), color::Fg(color::Reset));
-        if self.drawn {
+        let cell_value = format!("{}■{}", Fg(color), Fg(color::Reset));
+        if self.shown {
             print_at_cell(&mut self.term, cell, &cell_value);
         }
         self.cells[cell] = cell_value;
@@ -51,7 +51,7 @@ impl Field {
 
     pub fn unset_cell(&mut self, cell: (usize, usize)) {
         self.cells[cell] = String::new();
-        if self.drawn {
+        if self.shown {
             print_at_cell(&mut self.term, cell, " ");
         }
     }

@@ -1,10 +1,11 @@
 mod game;
 
+use clap::{App, Arg, AppSettings};
 use game::Game;
-use clap::{App, Arg,};
 
 fn main() {
     let matches = App::new("snake")
+        .setting(AppSettings::DisableVersion)
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("A simple snake game. You can use both arrows and vim-like keys")
@@ -27,7 +28,7 @@ fn main() {
                 .short("d")
                 .takes_value(true)
                 .value_name("N")
-                .default_value("285")
+                .default_value("285"),
         ])
         .get_matches();
 

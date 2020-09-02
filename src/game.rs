@@ -3,7 +3,7 @@ mod field;
 use itertools::iproduct;
 use rand::{rngs::ThreadRng, seq::IteratorRandom, thread_rng};
 use std::collections::{HashSet, VecDeque};
-use std::io::{prelude::*, stdin, stdout};
+use std::io::stdin;
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -175,7 +175,7 @@ impl Game {
     }
 
     pub fn start(mut self, move_delay: u64) -> ! {
-        self.field.draw();
+        self.field.show();
         let events_queue = EventsQueue::start();
         let mut next_step_time = SystemTime::now();
         loop {
