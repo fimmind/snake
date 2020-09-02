@@ -5,7 +5,7 @@ use rand::{rngs::ThreadRng, seq::IteratorRandom, thread_rng};
 use std::collections::{HashSet, VecDeque};
 use std::io::stdin;
 use std::process;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime};
 use termion::color;
@@ -59,37 +59,23 @@ enum Event {
     Quit,
 }
 
-#[derive(Debug, Clone)]
-struct EventsQueue {
-    queue: Arc<Mutex<VecDeque<Event>>>,
-}
-
-impl EventsQueue {
-    fn start() -> Self {
-        let events_queue = Arc::new(Mutex::new(VecDeque::new()));
-        let ret = events_queue.clone();
-
-        thread::spawn(move || {
-            for event in stdin().keys() {
-                if let Ok(key) = event {
-                    events_queue.lock().unwrap().push_back(match key {
-                        Key::Char('h') | Key::Left => Event::Move(Direction::Left),
-                        Key::Char('j') | Key::Down => Event::Move(Direction::Down),
-                        Key::Char('k') | Key::Up => Event::Move(Direction::Up),
-                        Key::Char('l') | Key::Right => Event::Move(Direction::Right),
-                        Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
-                        _ => continue,
-                    })
-                }
+fn start_events_channel() -> mpsc::Receiver<Event> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for key in stdin().keys() {
+            if let Err(_) = tx.send(match key.unwrap() {
+                Key::Char('h') | Key::Left => Event::Move(Direction::Left),
+                Key::Char('j') | Key::Down => Event::Move(Direction::Down),
+                Key::Char('k') | Key::Up => Event::Move(Direction::Up),
+                Key::Char('l') | Key::Right => Event::Move(Direction::Right),
+                Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
+                _ => continue,
+            }) {
+                break;
             }
-        });
-
-        EventsQueue { queue: ret }
-    }
-
-    fn pop(&self) -> Option<Event> {
-        self.queue.lock().unwrap().pop_front()
-    }
+        }
+    });
+    rx
 }
 
 pub struct Game {
@@ -176,10 +162,10 @@ impl Game {
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
-        let events_queue = EventsQueue::start();
+        let events_receiver = start_events_channel();
         let mut next_step_time = SystemTime::now();
         loop {
-            if let Some(event) = events_queue.pop() {
+            if let Ok(event) = events_receiver.try_recv() {
                 match event {
                     Event::Move(dir) => {
                         if self.set_direction(dir) {
