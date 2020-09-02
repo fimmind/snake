@@ -153,7 +153,7 @@ impl Game {
             self.snake_pop_tail();
         }
 
-        if self.snake.len() == self.size.0 * self.size.1 {
+        if self.empty_cells.is_empty() {
             self.stop("You won!");
         }
 
