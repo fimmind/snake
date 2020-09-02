@@ -1,18 +1,16 @@
 mod field;
+mod keys_queue;
 
 use itertools::iproduct;
 use rand::{rngs::ThreadRng, seq::IteratorRandom, thread_rng};
 use std::collections::{HashSet, VecDeque};
-use std::io::stdin;
 use std::process;
-use std::sync::mpsc;
-use std::thread;
 use std::time::{Duration, SystemTime};
 use termion::color;
 use termion::event::Key;
-use termion::input::TermRead;
 
 use field::Field;
+use keys_queue::KeysQueue;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Direction {
@@ -40,23 +38,17 @@ enum Event {
     Quit,
 }
 
-fn start_events_channel() -> mpsc::Receiver<Event> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        for key in stdin().keys() {
-            if let Err(_) = tx.send(match key.unwrap() {
-                Key::Char('h') | Key::Left => Event::Move(Direction::Left),
-                Key::Char('j') | Key::Down => Event::Move(Direction::Down),
-                Key::Char('k') | Key::Up => Event::Move(Direction::Up),
-                Key::Char('l') | Key::Right => Event::Move(Direction::Right),
-                Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
-                _ => continue,
-            }) {
-                break;
-            }
-        }
-    });
-    rx
+impl Event {
+    fn from_key(key: Key) -> Option<Self> {
+        Some(match key {
+            Key::Char('h') | Key::Char('a') | Key::Left => Event::Move(Direction::Left),
+            Key::Char('j') | Key::Char('s') | Key::Down => Event::Move(Direction::Down),
+            Key::Char('k') | Key::Char('w') | Key::Up => Event::Move(Direction::Up),
+            Key::Char('l') | Key::Char('d') | Key::Right => Event::Move(Direction::Right),
+            Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
+            _ => return None,
+        })
+    }
 }
 
 pub struct Game {
@@ -90,11 +82,7 @@ impl Game {
         game
     }
 
-    fn moved_point(
-        &self,
-        (mut x, mut y): (usize, usize),
-        dir: Direction,
-    ) -> (usize, usize) {
+    fn moved_point(&self, (mut x, mut y): (usize, usize), dir: Direction) -> (usize, usize) {
         x += self.size.0;
         y += self.size.1;
         match dir {
@@ -155,20 +143,23 @@ impl Game {
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
-        let events_receiver = start_events_channel();
+        let keys_queue = KeysQueue::start();
         let mut next_step_time = SystemTime::now();
         let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
         loop {
-            if let Ok(event) = events_receiver.try_recv() {
-                match event {
-                    Event::Move(dir) => {
-                        if self.make_step(dir) {
-                            next_step_time = get_next_step_time();
+            while let Some(key) = keys_queue.pop() {
+                Event::from_key(key).map(|event| {
+                    match event {
+                        Event::Move(dir) => {
+                            if self.make_step(dir) {
+                                next_step_time = get_next_step_time();
+                            }
                         }
-                    }
-                    Event::Quit => self.stop(""),
-                };
-            } else if next_step_time <= SystemTime::now() {
+                        Event::Quit => self.stop(""),
+                    };
+                });
+            }
+            if next_step_time <= SystemTime::now() {
                 if self.make_step(self.snake_direction) {
                     next_step_time = get_next_step_time();
                 }
