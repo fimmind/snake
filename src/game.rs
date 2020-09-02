@@ -32,25 +32,6 @@ impl Direction {
             Down => Up,
         }
     }
-
-    fn move_point(
-        self,
-        (x_size, y_size): (usize, usize),
-        (mut x, mut y): (usize, usize),
-    ) -> (usize, usize) {
-        x += x_size;
-        y += y_size;
-        match self {
-            Direction::Right => x += 1,
-            Direction::Up => y -= 1,
-            Direction::Left => x -= 1,
-            Direction::Down => y += 1,
-        }
-        x %= x_size;
-        y %= y_size;
-
-        (x, y)
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -83,7 +64,6 @@ pub struct Game {
     snake: VecDeque<(usize, usize)>,
     empty_cells: HashSet<(usize, usize)>,
     snake_direction: Direction,
-    blocked_direction: Direction,
     food: (usize, usize),
     rng: ThreadRng,
     field: Field,
@@ -98,7 +78,6 @@ impl Game {
             snake: vec![(mid_x, mid_y), (mid_x, mid_y + 1)].into(),
             empty_cells: iproduct!(0..size.0, 0..size.1).collect(),
             snake_direction: Direction::Up,
-            blocked_direction: Direction::Down,
             food: (0, 0),
             rng: thread_rng(),
             field: Field::new(size),
@@ -111,12 +90,23 @@ impl Game {
         game
     }
 
-    fn set_direction(&mut self, dir: Direction) -> bool {
-        if self.blocked_direction != dir {
-            self.snake_direction = dir;
-            return true;
+    fn moved_point(
+        &self,
+        (mut x, mut y): (usize, usize),
+        dir: Direction,
+    ) -> (usize, usize) {
+        x += self.size.0;
+        y += self.size.1;
+        match dir {
+            Direction::Right => x += 1,
+            Direction::Up => y -= 1,
+            Direction::Left => x -= 1,
+            Direction::Down => y += 1,
         }
-        false
+        x %= self.size.0;
+        y %= self.size.1;
+
+        (x, y)
     }
 
     fn gen_food(&mut self) {
@@ -124,60 +114,64 @@ impl Game {
         self.field.set_cell(self.food, color::Red);
     }
 
-    fn snake_push_head(&mut self, cell: (usize, usize)) {
+    fn push_snake_head(&mut self, cell: (usize, usize)) {
         self.snake.push_front(cell);
         self.field.set_cell(cell, color::White);
         self.empty_cells.remove(&cell);
     }
 
-    fn snake_pop_tail(&mut self) {
+    fn pop_snake_tail(&mut self) {
         let tail = self.snake.pop_back().unwrap();
         self.field.unset_cell(tail);
         self.empty_cells.insert(tail);
     }
 
-    fn make_step(&mut self) {
-        let next_step = self
-            .snake_direction
-            .move_point(self.size, *self.snake.front().unwrap());
-
-        if self.snake.iter().any(|piece| piece == &next_step) {
-            self.stop("You died");
+    fn make_step(&mut self, dir: Direction) -> bool {
+        if dir == self.snake_direction.opposite() {
+            return false;
         }
+        self.snake_direction = dir;
+        let next_step = self.moved_point(*self.snake.front().unwrap(), dir);
 
-        self.snake_push_head(next_step);
+        if !(next_step == self.food) {
+            self.pop_snake_tail();
+        }
+        for cell in self.snake.iter() {
+            if cell == &next_step {
+                self.stop("You died");
+            }
+        }
+        self.push_snake_head(next_step);
 
         if next_step == self.food {
             self.gen_food();
-        } else {
-            self.snake_pop_tail();
         }
 
         if self.empty_cells.is_empty() {
             self.stop("You won!");
         }
-
-        self.blocked_direction = self.snake_direction.opposite();
+        true
     }
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
         let events_receiver = start_events_channel();
         let mut next_step_time = SystemTime::now();
+        let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
         loop {
             if let Ok(event) = events_receiver.try_recv() {
                 match event {
                     Event::Move(dir) => {
-                        if self.set_direction(dir) {
-                            self.make_step();
-                            next_step_time = SystemTime::now() + Duration::from_millis(move_delay);
+                        if self.make_step(dir) {
+                            next_step_time = get_next_step_time();
                         }
                     }
                     Event::Quit => self.stop(""),
                 };
             } else if next_step_time <= SystemTime::now() {
-                self.make_step();
-                next_step_time = SystemTime::now() + Duration::from_millis(move_delay);
+                if self.make_step(self.snake_direction) {
+                    next_step_time = get_next_step_time();
+                }
             }
         }
     }
