@@ -187,7 +187,7 @@ impl Game {
                             next_step_time = SystemTime::now() + Duration::from_millis(move_delay);
                         }
                     }
-                    Event::Quit => self.stop("Goodbye"),
+                    Event::Quit => self.stop(""),
                 };
             } else if next_step_time <= SystemTime::now() {
                 self.make_step();
@@ -198,7 +198,9 @@ impl Game {
 
     fn stop(&mut self, message: &str) -> ! {
         self.field.hide();
-        println!("{}", message);
+        if !message.is_empty() {
+            println!("{}", message);
+        }
         process::exit(0);
     }
 }
