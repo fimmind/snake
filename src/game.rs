@@ -198,8 +198,7 @@ impl Game {
 
     fn stop(&mut self, message: &str) -> ! {
         self.field.hide();
-        print!("{}", message);
-        stdout().flush().unwrap();
+        println!("{}", message);
         process::exit(0);
     }
 }
