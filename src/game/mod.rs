@@ -1,5 +1,5 @@
 mod field;
-mod keys_queue;
+mod keys_events;
 
 use itertools::iproduct;
 use rand::{rngs::ThreadRng, seq::IteratorRandom, thread_rng};
@@ -7,10 +7,11 @@ use std::collections::{HashSet, VecDeque};
 use std::process;
 use std::time::{Duration, SystemTime};
 use termion::color;
+use std::convert::TryFrom;
 use termion::event::Key;
 
 use field::Field;
-use keys_queue::KeysQueue;
+use keys_events::KeysEventsQueue;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Direction {
@@ -38,15 +39,16 @@ enum Event {
     Quit,
 }
 
-impl Event {
-    fn from_key(key: Key) -> Option<Self> {
-        Some(match key {
+impl TryFrom<Key> for Event {
+    type Error = ();
+    fn try_from(value: Key) -> Result<Self, Self::Error> {
+        Ok(match value {
             Key::Char('h') | Key::Char('a') | Key::Left => Event::Move(Direction::Left),
             Key::Char('j') | Key::Char('s') | Key::Down => Event::Move(Direction::Down),
             Key::Char('k') | Key::Char('w') | Key::Up => Event::Move(Direction::Up),
             Key::Char('l') | Key::Char('d') | Key::Right => Event::Move(Direction::Right),
             Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
-            _ => return None,
+            _ => return Err(()),
         })
     }
 }
@@ -143,21 +145,19 @@ impl Game {
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
-        let keys_queue = KeysQueue::start();
+        let keys_queue = KeysEventsQueue::start();
         let mut next_step_time = SystemTime::now();
         let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
         loop {
-            while let Some(key) = keys_queue.pop() {
-                Event::from_key(key).map(|event| {
-                    match event {
-                        Event::Move(dir) => {
-                            if self.make_step(dir) {
-                                next_step_time = get_next_step_time();
-                            }
+            while let Some(event) = keys_queue.pop() {
+                match event {
+                    Event::Move(dir) => {
+                        if self.make_step(dir) {
+                            next_step_time = get_next_step_time();
                         }
-                        Event::Quit => self.stop(""),
-                    };
-                });
+                    }
+                    Event::Quit => self.stop(""),
+                };
             }
             if next_step_time <= SystemTime::now() {
                 if self.make_step(self.snake_direction) {
