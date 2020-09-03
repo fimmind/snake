@@ -3,12 +3,18 @@ mod keys_events;
 
 use itertools::iproduct;
 use rand::{rngs::ThreadRng, seq::IteratorRandom, thread_rng};
+use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
+use std::convert::TryFrom;
+use std::io::{stdout, Stdout, Write};
 use std::process;
+use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 use termion::color;
-use std::convert::TryFrom;
+use termion::cursor;
 use termion::event::Key;
+use termion::raw::{IntoRawMode, RawTerminal};
+use termion::screen::{AlternateScreen, ToMainScreen};
 
 use field::Field;
 use keys_events::KeysEventsQueue;
@@ -36,6 +42,7 @@ impl Direction {
 #[derive(Debug, Copy, Clone)]
 enum Event {
     Move(Direction),
+    Pause,
     Quit,
 }
 
@@ -47,7 +54,8 @@ impl TryFrom<Key> for Event {
             Key::Char('j') | Key::Char('s') | Key::Down => Event::Move(Direction::Down),
             Key::Char('k') | Key::Char('w') | Key::Up => Event::Move(Direction::Up),
             Key::Char('l') | Key::Char('d') | Key::Right => Event::Move(Direction::Right),
-            Key::Char('q') | Key::Esc | Key::Ctrl('c') => Event::Quit,
+            Key::Char('p') | Key::Char(' ') | Key::Esc => Event::Pause,
+            Key::Char('q') | Key::Ctrl('c') => Event::Quit,
             _ => return Err(()),
         })
     }
@@ -61,10 +69,15 @@ pub struct Game {
     food: (usize, usize),
     rng: ThreadRng,
     field: Field,
+    screen: Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>,
 }
 
 impl Game {
     pub fn new(size: (usize, usize)) -> Self {
+        let screen = Rc::new(RefCell::new(AlternateScreen::from(
+            stdout().into_raw_mode().unwrap(),
+        )));
+
         let mid_x = size.0 / 2;
         let mid_y = size.1 / 2;
         let mut game = Game {
@@ -74,7 +87,8 @@ impl Game {
             snake_direction: Direction::Up,
             food: (0, 0),
             rng: thread_rng(),
-            field: Field::new(size),
+            field: Field::new(Rc::clone(&screen), size),
+            screen,
         };
         for &cell in game.snake.iter() {
             game.field.set_cell(cell, color::White);
@@ -145,6 +159,7 @@ impl Game {
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
+        let mut paused = false;
         let keys_queue = KeysEventsQueue::start();
         let mut next_step_time = SystemTime::now();
         let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
@@ -152,14 +167,30 @@ impl Game {
             while let Some(event) = keys_queue.pop() {
                 match event {
                     Event::Move(dir) => {
-                        if self.make_step(dir) {
+                        if !paused && self.make_step(dir) {
+                            next_step_time = get_next_step_time();
+                        }
+                    }
+                    Event::Pause => {
+                        paused = !paused;
+                        if paused {
+                            self.field.hide();
+                            let mut screen = self.screen.borrow_mut();
+                            write!(
+                                screen,
+                                "{}Game paused. Press space to continue...",
+                                cursor::Goto(1, 1)
+                            ).unwrap();
+                            screen.flush().unwrap();
+                        } else {
+                            self.field.show();
                             next_step_time = get_next_step_time();
                         }
                     }
                     Event::Quit => self.stop(""),
                 };
             }
-            if next_step_time <= SystemTime::now() {
+            if !paused && next_step_time <= SystemTime::now() {
                 if self.make_step(self.snake_direction) {
                     next_step_time = get_next_step_time();
                 }
@@ -169,6 +200,10 @@ impl Game {
 
     fn stop(&mut self, message: &str) -> ! {
         self.field.hide();
+        let mut screen = self.screen.borrow_mut();
+        write!(screen, "{}", ToMainScreen).unwrap();
+        screen.flush().unwrap();
+
         if !message.is_empty() {
             println!("{}", message);
         }
