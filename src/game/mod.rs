@@ -207,6 +207,7 @@ impl Game {
     fn stop(&mut self, message: &str) -> ! {
         self.field.hide();
         let mut screen = self.screen.borrow_mut();
+        screen.suspend_raw_mode().unwrap();
         write!(screen, "{}", ToMainScreen).unwrap();
         screen.flush().unwrap();
 
