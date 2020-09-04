@@ -5,13 +5,13 @@
 ## Installation
 Using cargo:
 ```shell
-# cargo install --git https://github.com/fimmind/snake --root ~/.local
+$ cargo install --git https://github.com/fimmind/snake --root ~/.local
 ```
 
 ## Usage
 
 ```shell
-# snake --help
+$ snake --help
 snake 0.1.0
 fimmind <fimmind@mail.ru>
 A simple snake game. You can use both arrows and vim-like keys
