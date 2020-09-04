@@ -54,8 +54,8 @@ impl TryFrom<Key> for Event {
             Key::Char('j') | Key::Char('s') | Key::Down => Event::Move(Direction::Down),
             Key::Char('k') | Key::Char('w') | Key::Up => Event::Move(Direction::Up),
             Key::Char('l') | Key::Char('d') | Key::Right => Event::Move(Direction::Right),
-            Key::Char('p') | Key::Char(' ') | Key::Esc => Event::Pause,
-            Key::Char('q') | Key::Ctrl('c') => Event::Quit,
+            Key::Char('q') | Key::Ctrl('c') | Key::Esc => Event::Quit,
+            Key::Char('p') | Key::Char(' ') => Event::Pause,
             _ => return Err(()),
         })
     }
