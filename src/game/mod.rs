@@ -62,6 +62,7 @@ impl TryFrom<Key> for Event {
 }
 
 pub struct Game {
+    paused: bool,
     size: (usize, usize),
     snake: VecDeque<(usize, usize)>,
     empty_cells: HashSet<(usize, usize)>,
@@ -81,6 +82,7 @@ impl Game {
         let mid_x = size.0 / 2;
         let mid_y = size.1 / 2;
         let mut game = Game {
+            paused: false,
             size,
             snake: vec![(mid_x, mid_y), (mid_x, mid_y + 1)].into(),
             empty_cells: iproduct!(0..size.0, 0..size.1).collect(),
@@ -157,9 +159,25 @@ impl Game {
         true
     }
 
+    fn toggle_paused(&mut self) {
+        self.paused = !self.paused;
+        if self.paused {
+            self.field.hide();
+            let mut screen = self.screen.borrow_mut();
+            write!(
+                screen,
+                "{}Game paused. Press space to continue...",
+                cursor::Goto(1, 1)
+            )
+            .unwrap();
+            screen.flush().unwrap();
+        } else {
+            self.field.show();
+        }
+    }
+
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
-        let mut paused = false;
         let keys_queue = KeysEventsQueue::start();
         let mut next_step_time = SystemTime::now();
         let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
@@ -167,30 +185,18 @@ impl Game {
             while let Some(event) = keys_queue.pop() {
                 match event {
                     Event::Move(dir) => {
-                        if !paused && self.make_step(dir) {
+                        if !self.paused && self.make_step(dir) {
                             next_step_time = get_next_step_time();
                         }
                     }
                     Event::Pause => {
-                        paused = !paused;
-                        if paused {
-                            self.field.hide();
-                            let mut screen = self.screen.borrow_mut();
-                            write!(
-                                screen,
-                                "{}Game paused. Press space to continue...",
-                                cursor::Goto(1, 1)
-                            ).unwrap();
-                            screen.flush().unwrap();
-                        } else {
-                            self.field.show();
-                            next_step_time = get_next_step_time();
-                        }
-                    }
+                        self.toggle_paused();
+                        next_step_time = get_next_step_time();
+                    },
                     Event::Quit => self.stop(""),
                 };
             }
-            if !paused && next_step_time <= SystemTime::now() {
+            if !self.paused && next_step_time <= SystemTime::now() {
                 if self.make_step(self.snake_direction) {
                     next_step_time = get_next_step_time();
                 }
