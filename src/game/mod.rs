@@ -17,7 +17,7 @@ use termion::raw::{IntoRawMode, RawTerminal};
 use termion::screen::{AlternateScreen, ToMainScreen};
 
 use field::Field;
-use keys_events::KeysEventsQueue;
+use keys_events::KeyEventsQueue;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Direction {
@@ -178,7 +178,7 @@ impl Game {
 
     pub fn start(mut self, move_delay: u64) -> ! {
         self.field.show();
-        let keys_queue = KeysEventsQueue::start();
+        let keys_queue = KeyEventsQueue::start();
         let mut next_step_time = SystemTime::now();
         let get_next_step_time = || SystemTime::now() + Duration::from_millis(move_delay);
         loop {

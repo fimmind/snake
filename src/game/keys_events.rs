@@ -5,23 +5,24 @@ use termion::event::Key;
 use termion::input::TermRead;
 use std::convert::TryFrom;
 
-pub struct KeysEventsQueue<E> {
+pub struct KeyEventsQueue<E> {
     rx: mpsc::Receiver<E>,
 }
 
-impl<E: TryFrom<Key> + Send + 'static> KeysEventsQueue<E> {
+impl<E: TryFrom<Key> + Send + 'static> KeyEventsQueue<E> {
     pub fn start() -> Self {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             for key in stdin().keys() {
                 if let Ok(event) = E::try_from(key.unwrap()) {
-                    if let Err(_) = tx.send(event) {
-                        break;
+                    match tx.send(event) {
+                        Err(_) => break,
+                        Ok(_) => continue,
                     }
                 }
             }
         });
-        KeysEventsQueue { rx }
+        KeyEventsQueue { rx }
     }
 
     pub fn pop(&self) -> Option<E> {
