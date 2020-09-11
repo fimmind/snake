@@ -1,40 +1,25 @@
 mod game;
 
-use clap::{App, Arg, AppSettings};
 use game::Game;
+use structopt::StructOpt;
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "snake")]
+struct Opt {
+    /// Field's width (in cells)
+    #[structopt(short, long, default_value = "20")]
+    width: usize,
+
+    /// Field's height (in cells)
+    #[structopt(short, long, default_value = "10")]
+    height: usize,
+
+    /// Step delay (in miliseconds)
+    #[structopt(short, long, default_value = "285")]
+    delay: u64,
+}
 
 fn main() {
-    let matches = App::new("snake")
-        .setting(AppSettings::DisableVersion)
-        .version(env!("CARGO_PKG_VERSION"))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about("A simple snake game. You can use both arrows and vim-like keys")
-        .args(&[
-            Arg::with_name("field width")
-                .help("Field's width (cells)")
-                .long("width")
-                .short("w")
-                .value_name("N")
-                .default_value("20"),
-            Arg::with_name("field height")
-                .help("Field's height (cells)")
-                .long("height")
-                .short("h")
-                .value_name("N")
-                .default_value("10"),
-            Arg::with_name("step delay")
-                .help("Step delay (miliseconds)")
-                .long("delay")
-                .short("d")
-                .takes_value(true)
-                .value_name("N")
-                .default_value("285"),
-        ])
-        .get_matches();
-
-    let width = matches.value_of("field width").unwrap().parse().unwrap();
-    let height = matches.value_of("field height").unwrap().parse().unwrap();
-    let delay = matches.value_of("step delay").unwrap().parse().unwrap();
-
-    Game::new((width, height)).start(delay);
+    let opt = Opt::from_args();
+    Game::new((opt.width, opt.height)).start(opt.delay);
 }
